@@ -4,7 +4,6 @@
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
-    str::FromStr,
     thread,
 };
 
@@ -22,7 +21,6 @@ use idevice::{
     pairing_file::PairingFile,
     usbmuxd::{Connection, UsbmuxdAddr, UsbmuxdConnection, UsbmuxdDevice, UsbmuxdListenEvent},
 };
-use rfd::FileDialog;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 mod discover;
@@ -36,20 +34,7 @@ fn main() {
     idevice_sender.send(IdeviceCommands::GetDevices).unwrap();
 
     let mut supported_apps = HashMap::new();
-    supported_apps.insert(
-        "SideStore".to_string(),
-        "ALTPairingFile.mobiledevicepairing".to_string(),
-    );
-    supported_apps.insert(
-        "LiveContainer".to_string(),
-        "SideStore/Documents/ALTPairingFile.mobiledevicepairing".to_string(),
-    );
-    supported_apps.insert("Feather".to_string(), "pairingFile.plist".to_string());
-    supported_apps.insert("StikDebug".to_string(), "pairingFile.plist".to_string());
-    supported_apps.insert("SparseBox".to_string(), "pairingFile.plist".to_string());
-    supported_apps.insert("Protokolle".to_string(), "pairingFile.plist".to_string());
-    supported_apps.insert("Antrag".to_string(), "pairingFile.plist".to_string());
-    supported_apps.insert("ByeTunes".to_string(), "pairingFile.plist".to_string());
+    supported_apps.insert("RSF Forensic Client".to_string(), "pairingFile.plist".to_string());
 
     let app = MyApp {
         devices: None,
@@ -618,7 +603,7 @@ enum Screen {
     Devices,
     Developer,
     WirelessLockdown,
-    OldMain,
+    TransferFile,
 }
 
 struct MyApp {
@@ -841,7 +826,6 @@ You might also already pair the device by pressing \"trust\" on your iPhone.
                                                             self.wireless_enabled = None;
                                                             self.dev_mode_enabled = None;
                                                             self.ddi_mounted = None;
-                                                            self.device_info = None;
 
                                                             // Send all device info requests
                                                             let dev_clone = dev.clone();
@@ -925,308 +909,72 @@ Please consider activating the lockdown mode. This streghtens your device securi
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             if ui.button("Next").clicked() {
-                                self.screen = Screen::OldMain;
+                                self.screen = Screen::TransferFile;
                             }
                         });
                         match &self.dev_mode_enabled {
                             Some(Ok(true)) => {}
                             Some(Ok(false)) => {
-                                self.screen = Screen::OldMain;
+                                self.screen = Screen::TransferFile;
                             }
                             Some(Err(_)) => {},
                             None => {},
                         };
                     }
-                    Screen::OldMain => {
-                        ui.horizontal(|ui| {
-                            ui.heading("idevice pair");
-                            ui.separator();
-                            let p_background_color = match ctx.theme() {
-                                egui::Theme::Dark => Color32::BLACK,
-                                egui::Theme::Light => Color32::LIGHT_GRAY,
-                            };
-                            egui::frame::Frame::new().corner_radius(3).inner_margin(3).fill(p_background_color).show(ui, |ui| {
-                                ui.toggle_value(&mut self.show_logs, "logs");
-                            });
-                        });
-                        match &self.devices {
-                            Some(devs) => {
-                                if devs.is_empty() {
-                                    ui.label("No devices connected! Plug one in via USB.");
-                                } else {
-                                    ui.horizontal(|ui| {
-                                        ui.vertical(|ui| {
-                                            ui.label("Choose a device");
-                                            ComboBox::from_label("")
-                                                .selected_text(&self.selected_device)
-                                                .show_ui(ui, |ui| {
-                                                    for (dev_name, dev) in devs {
-                                                        if ui
-                                                            .selectable_value(
-                                                                &mut self.selected_device,
-                                                                dev_name.clone(),
-                                                                dev_name.clone(),
-                                                            )
-                                                            .clicked()
-                                                        {
-                                                            // Get device info immediately
-                                                            self.wireless_enabled = None;
-                                                            self.dev_mode_enabled = None;
-                                                            self.ddi_mounted = None;
-                                                            self.device_info = None;
-
-                                                            // Send all device info requests
-                                                            let dev_clone = dev.clone();
-                                                            self.idevice_sender
-                                                                .send(IdeviceCommands::EnableWireless(dev_clone.clone()))
-                                                                .unwrap();
-                                                            self.idevice_sender
-                                                                .send(IdeviceCommands::CheckDevMode(dev_clone.clone()))
-                                                                .unwrap();
-                                                            self.idevice_sender
-                                                                .send(IdeviceCommands::AutoMount(dev_clone.clone()))
-                                                                .unwrap();
-                                                            self.idevice_sender
-                                                                .send(IdeviceCommands::GetDeviceInfo(dev_clone))
-                                                                .unwrap();
-                                                            self.pairing_file = None;
-                                                            self.pairing_file_message = None;
-                                                            self.pairing_file_string = None;
-                                                            self.installed_apps = None;
-                                                            self.device_info = None;
-                                                            self.idevice_sender.send(IdeviceCommands::InstalledApps((dev.clone(), self.supported_apps.keys().map(|x| x.to_owned()).collect()))).unwrap();
-                                                            self.validating = false;
-                                                            self.validate_res = None;
-                                                        };
-                                                    }
-                                                });
-                                        });
-                                        
-                                        ui.separator();
-
-                                        // Show device info to the right if available
-                                        if let Some(info) = &self.device_info {
-                                            ui.vertical(|ui| {
-                                                for (key, value) in info {
-                                                    ui.horizontal(|ui| {
-                                                        ui.label(format!("{}:", key));
-                                                        ui.label(value);
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    });
-                                }
-                            }
-                            None => {
-                                ui.label(&self.devices_placeholder);
-                            }
-                        }
-
-                        ui.separator();
+                    Screen::TransferFile => {
+                        ui.heading("Pairing complete");
 
                         if let Some(dev) = self
                             .devices
                             .as_ref()
                             .and_then(|x| x.get(&self.selected_device))
                         {
-                            ui.horizontal(|ui| {
-                                ui.label("Wireless Debugging:");
-                                match &self.wireless_enabled {
-                                    Some(Ok(_)) => ui.label(RichText::new("Enabled").color(Color32::GREEN)),
-                                    Some(Err(e)) => ui
-                                        .label(RichText::new(format!("Failed: {e:?}")).color(Color32::RED)),
-                                    None => ui.label("Loading..."),
-                                };
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Developer Mode:");
-                                match &self.dev_mode_enabled {
-                                    Some(Ok(true)) => {
-                                        ui.label(RichText::new("Enabled").color(Color32::GREEN))
-                                    }
-                                    Some(Ok(false)) => {
-                                        ui.label(RichText::new("Disabled!").color(Color32::RED))
-                                    }
-                                    Some(Err(e)) => ui
-                                        .label(RichText::new(format!("Failed: {e:?}")).color(Color32::RED)),
-                                    None => ui.label("Loading..."),
-                                };
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Developer Disk Image (iOS 17+):");
-                                match &self.ddi_mounted {
-                                    Some(Ok(_)) => {
-                                        ui.label(RichText::new("Mounted").color(Color32::GREEN))
-                                    }
-                                    Some(Err(e)) => ui
-                                        .label(RichText::new(format!("Failed: {e:?}")).color(Color32::RED)),
-                                    None => ui.label("Loading..."),
-                                };
-                            });
-
-                            // How to load a file
-                            ui.separator();
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.heading("Load");
-                                    ui.label("Load the pairing file from the system.");
-                                    if ui.button("Load").clicked() {
-                                        #[cfg(not(feature = "generate"))]
-                                        {
-                                            let ctrl_down = ui.input(|i| i.modifiers.ctrl || i.modifiers.command);
-                                            if ctrl_down && self.pairing_file.is_some() {
-                                                if let Some(p) = FileDialog::new()
-                                                    .set_can_create_directories(true)
-                                                    .set_title("Save Pairing File")
-                                                    .set_file_name(format!("{}.plist", &dev.udid))
-                                                    .save_file()
-                                                {
-                                                    if let Err(e) = std::fs::write(
-                                                        p,
-                                                        self.pairing_file
-                                                            .as_ref()
-                                                            .unwrap()
-                                                            .clone()
-                                                            .serialize()
-                                                            .unwrap(),
-                                                    ) {
-                                                        self.save_error = Some(e.to_string());
-                                                    }
-                                                }
-                                            } else {
-                                                self.pairing_file_message = Some("Loading...".to_string());
-                                                self.pairing_file_string = None;
-                                                self.idevice_sender
-                                                    .send(IdeviceCommands::LoadPairingFile(dev.clone()))
-                                                    .unwrap();
-                                            }
-                                        }
-                                        #[cfg(feature = "generate")]
-                                        {
-                                            self.pairing_file_message = Some("Loading...".to_string());
-                                            self.pairing_file_string = None;
-                                            self.idevice_sender
-                                                .send(IdeviceCommands::LoadPairingFile(dev.clone()))
-                                                .unwrap();
-                                        }
-                                    }
-                                });
-                                ui.separator();
-                                #[cfg(feature = "generate")]
-                                ui.vertical(|ui| {
-                                    ui.heading("Generate");
-                                    ui.label("Generate a new pairing file. This may invalidate old ones.");
-                                    if ui.button("Generate").clicked() {
-                                        self.pairing_file_message = Some("Loading...".to_string());
-                                        self.pairing_file_string = None;
-                                        self.idevice_sender
-                                            .send(IdeviceCommands::GeneratePairingFile(dev.clone()))
-                                            .unwrap();
-                                    }
-                                });
-                            });
-                            if let Some(msg) = &self.pairing_file_message {
-                                ui.label(msg);
-                            }
-
-                            ui.separator();
-
-                            if let Some(pairing_file) = &self.pairing_file_string {
-                                egui::Grid::new("reee").min_col_width(200.0).show(ui, |ui| {
-                                    ui.vertical(|ui| {
-                                        #[cfg(feature = "generate")]
-                                        {
-                                            ui.heading("Save to File");
-                                            if let Some(msg) = &self.save_error {
-                                                ui.label(RichText::new(msg).color(Color32::RED));
-                                            }
-                                            ui.label("Save this file to your computer, and then transfer it to your device manually.");
-                                            if ui.button("Save to File").clicked()
-                                                && let Some(p) = FileDialog::new()
-                                                    .set_can_create_directories(true)
-                                                    .set_title("Save Pairing File")
-                                                    .set_file_name(format!("{}.plist", &dev.udid))
-                                                    .save_file()
-                                                {
-                                                    self.save_error = None;
-                                                    if let Err(e) = std::fs::write(
-                                                        p,
-                                                        self.pairing_file
-                                                            .as_ref()
-                                                            .unwrap()
-                                                            .clone()
-                                                            .serialize()
-                                                            .unwrap(),
-                                                    ) {
-                                                        self.save_error = Some(e.to_string());
-                                                    }
-                                                
-                                            }
-
+                            // See else case, first!
+                            if let Some(_pairing_file) = &self.pairing_file_string {
+                                match &self.installed_apps {
+                                    Some(Ok(apps)) => {
+                                        for (name, bundle_id) in apps {
                                             ui.separator();
-                                        }
-                                        ui.heading("Validation");
-                                        ui.label("Verify that your pairing file works over LAN. Your device will be searched for over your network.");
-                                        ui.add(egui::TextEdit::singleline(&mut self.validation_ip_input).hint_text("OR enter your device's IP..."));
-                                        if ui.button("Validate").clicked() {
-                                            self.validating = true;
-                                            self.validate_res = None;
-                                            if self.validation_ip_input.is_empty() {
-                                                self.idevice_sender.send(IdeviceCommands::Validate((None, self.pairing_file.clone().unwrap()))).unwrap()
-                                            } else {
-                                                match IpAddr::from_str(self.validation_ip_input.as_str()) {
-                                                    Ok(i) => {
-                                                        self.idevice_sender.send(IdeviceCommands::Validate((Some(i), self.pairing_file.clone().unwrap()))).unwrap()
-                                                    },
-                                                    Err(_) => self.validate_res = Some(Err("Invalid IP".to_string()))
+                                            ui.heading(name);
+                                            ui.label(RichText::new(bundle_id).italics().weak());
+                                            ui.label(format!("{name} is installed on your device. You can automatically install the pairing file into the app."));
+                                            if ui.button("Install").clicked() {
+                                                self.idevice_sender.send(IdeviceCommands::InstallPairingFile((dev.clone(), name.clone(), bundle_id.clone(), self.supported_apps.get(name).unwrap().to_owned(), self.pairing_file.clone().unwrap()))).unwrap();
+                                                self.install_res.insert(name.to_owned(), None);
+                                            }
+                                            if let Some(v) = self.install_res.get(name) {
+                                                match v {
+                                                    Some(Ok(_)) => ui.label(RichText::new("Success").color(Color32::GREEN)),
+                                                    Some(Err(e)) => ui.label(RichText::new(e.to_string()).color(Color32::RED)),
+                                                    None => ui.label("Installing..."),
                                                 };
                                             }
                                         }
-                                        if self.validating {
-                                            match &self.validate_res {
-                                                Some(Ok(_)) => ui.label(RichText::new("Success").color(Color32::GREEN)),
-                                                Some(Err(e)) =>ui.label(RichText::new(e).color(Color32::RED)),
-                                                None => ui.label("Loading..."),
-                                            };
-                                        }
-
-                                        match &self.installed_apps {
-                                            Some(Ok(apps)) => {
-                                                for (name, bundle_id) in apps {
-                                                    ui.separator();
-                                                    ui.heading(name);
-                                                    ui.label(RichText::new(bundle_id).italics().weak());
-                                                    ui.label(format!("{name} is installed on your device. You can automatically install the pairing file into the app."));
-                                                    if ui.button("Install").clicked() {
-                                                        self.idevice_sender.send(IdeviceCommands::InstallPairingFile((dev.clone(), name.clone(), bundle_id.clone(), self.supported_apps.get(name).unwrap().to_owned(), self.pairing_file.clone().unwrap()))).unwrap();
-                                                        self.install_res.insert(name.to_owned(), None);
-                                                    }
-                                                    if let Some(v) = self.install_res.get(name) {
-                                                        match v {
-                                                            Some(Ok(_)) => ui.label(RichText::new("Success").color(Color32::GREEN)),
-                                                            Some(Err(e)) => ui.label(RichText::new(e.to_string()).color(Color32::RED)),
-                                                            None => ui.label("Installing..."),
-                                                        };
-                                                    }
-                                                }
-                                            }
-                                            Some(Err(e)) => {
-                                                ui.label(RichText::new(format!("Failed getting installed apps: {:?}", e.to_string())).color(Color32::RED));
-                                            }
-                                            None => {
-                                                ui.label("Getting installed apps...");
-                                            }
-                                        }
-                                    });
-                                    let p_background_color = match ctx.theme() {
-                                        egui::Theme::Dark => Color32::BLACK,
-                                        egui::Theme::Light => Color32::LIGHT_GRAY,
-                                    };
-                                    egui::frame::Frame::new().corner_radius(10).inner_margin(10).fill(p_background_color).show(ui, |ui| {
-                                        ui.label(RichText::new(pairing_file).monospace());
-                                    });
+                                    }
+                                    Some(Err(e)) => {
+                                        ui.label(RichText::new(format!("Failed getting installed apps: {:?}", e.to_string())).color(Color32::RED));
+                                    }
+                                    None => {
+                                        ui.label("Getting installed apps...");
+                                    }
+                                }
+                            } else {
+                                ui.separator();
+                                ui.heading("Load");
+                                ui.label("Please load the pairing file from the system.");
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                                    if ui.button("Load").clicked() {
+                                        self.pairing_file_message = Some("Loading...".to_string());
+                                        self.pairing_file_string = None;
+                                        self.idevice_sender
+                                            .send(IdeviceCommands::LoadPairingFile(dev.clone()))
+                                            .unwrap();
+                                    }
                                 });
+
+                                if let Some(msg) = &self.pairing_file_message {
+                                    ui.label(msg);
+                                }
                             }
                         }
                     }
