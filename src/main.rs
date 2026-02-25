@@ -617,6 +617,7 @@ enum Screen {
     Welcome,
     Devices,
     Developer,
+    WirelessLockdown,
     OldMain,
 }
 
@@ -903,14 +904,26 @@ Please consider activating the lockdown mode. This streghtens your device securi
                         ");
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             if ui.button("Next").clicked() {
-                                self.screen = Screen::OldMain;
+                                self.screen = Screen::WirelessLockdown;
                             }
                         });
                         match &self.dev_mode_enabled {
                             Some(Ok(true)) => {}
                             Some(Ok(false)) => {
-                                self.screen = Screen::OldMain;
+                                self.screen = Screen::WirelessLockdown;
                             }
+                            Some(Err(_)) => {},
+                            None => {},
+                        };
+                    }
+                    Screen::WirelessLockdown => {
+                        ui.heading("Wireless Connection");
+                        ui.label("
+For this app to work, you need to enable Wi-Fi connectibility for this iPhone.
+Please go to Finder > [Your iPhone] > General > Options and activate \"Show this iPhone when on Wi-Fi\".
+                        ");
+                        match &self.wireless_enabled {
+                            Some(Ok(_)) => self.screen = Screen::OldMain,
                             Some(Err(_)) => {},
                             None => {},
                         };
