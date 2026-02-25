@@ -615,6 +615,7 @@ enum IdeviceCommands {
 #[derive(PartialEq)]
 enum Screen {
     Welcome,
+    Devices,
     OldMain,
 }
 
@@ -802,8 +803,95 @@ To generate a pairing key, click Next.
                         ");
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             if ui.button("Next").clicked() {
-                                self.screen = Screen::OldMain;
+                                self.screen = Screen::Devices;
                             }
+                        });
+                    }
+                    Screen::Devices => {
+                        ui.heading("Pairing the device");
+                        ui.label("
+Please connect your iPhone with a cable to this computer.
+                        ");
+
+                        match &self.devices {
+                            Some(devs) => {
+                                if devs.is_empty() {
+                                    ui.label("No devices connected! Plug one in via USB and wait some seconds.");
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.label("Choose a device");
+                                            ComboBox::from_label("")
+                                                .selected_text(&self.selected_device)
+                                                .show_ui(ui, |ui| {
+                                                    for (dev_name, dev) in devs {
+                                                        if ui
+                                                            .selectable_value(
+                                                                &mut self.selected_device,
+                                                                dev_name.clone(),
+                                                                dev_name.clone(),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            // Get device info immediately
+                                                            self.wireless_enabled = None;
+                                                            self.dev_mode_enabled = None;
+                                                            self.ddi_mounted = None;
+                                                            self.device_info = None;
+
+                                                            // Send all device info requests
+                                                            let dev_clone = dev.clone();
+                                                            self.idevice_sender
+                                                                .send(IdeviceCommands::EnableWireless(dev_clone.clone()))
+                                                                .unwrap();
+                                                            self.idevice_sender
+                                                                .send(IdeviceCommands::CheckDevMode(dev_clone.clone()))
+                                                                .unwrap();
+                                                            self.idevice_sender
+                                                                .send(IdeviceCommands::AutoMount(dev_clone.clone()))
+                                                                .unwrap();
+                                                            self.idevice_sender
+                                                                .send(IdeviceCommands::GetDeviceInfo(dev_clone))
+                                                                .unwrap();self.pairing_file = None;
+                                                            self.pairing_file_message = None;
+                                                            self.pairing_file_string = None;
+                                                            self.installed_apps = None;
+                                                            self.device_info = None;
+                                                            self.idevice_sender.send(IdeviceCommands::InstalledApps((dev.clone(), self.supported_apps.keys().map(|x| x.to_owned()).collect()))).unwrap();
+                                                            self.validating = false;
+                                                            self.validate_res = None;
+                                                        };
+                                                    }
+                                                });
+                                        });
+                                        
+                                        ui.separator();
+
+                                        // Show device info to the right if available
+                                        if let Some(info) = &self.device_info {
+                                            ui.vertical(|ui| {
+                                                for (key, value) in info {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(format!("{}:", key));
+                                                        ui.label(value);
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            }
+                            None => {
+                                ui.label(&self.devices_placeholder);
+                            }
+                        }
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                            ui.add_enabled_ui(self.devices.as_ref().map_or(false, | devs: &HashMap<String, UsbmuxdDevice> | !devs.is_empty()), |ui| {
+                                if ui.button("Next").clicked() {
+                                    self.screen = Screen::OldMain;
+                                }
+                            });
                         });
                     }
                     Screen::OldMain => {
