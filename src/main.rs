@@ -616,6 +616,7 @@ enum IdeviceCommands {
 enum Screen {
     Welcome,
     Devices,
+    Developer,
     OldMain,
 }
 
@@ -889,10 +890,30 @@ Please connect your iPhone with a cable to this computer.
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             ui.add_enabled_ui(self.devices.as_ref().map_or(false, | devs: &HashMap<String, UsbmuxdDevice> | !devs.is_empty()), |ui| {
                                 if ui.button("Next").clicked() {
-                                    self.screen = Screen::OldMain;
+                                    self.screen = Screen::Developer;
                                 }
                             });
                         });
+                    }
+                    Screen::Developer => {
+                        ui.heading("Disable Developer Mode");
+                        ui.label("
+Please disable the developer mode. This mode weakens the security of your iPhone!
+Please consider activating the lockdown mode. This streghtens your device security!
+                        ");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                            if ui.button("Next").clicked() {
+                                self.screen = Screen::OldMain;
+                            }
+                        });
+                        match &self.dev_mode_enabled {
+                            Some(Ok(true)) => {}
+                            Some(Ok(false)) => {
+                                self.screen = Screen::OldMain;
+                            }
+                            Some(Err(_)) => {},
+                            None => {},
+                        };
                     }
                     Screen::OldMain => {
                         ui.horizontal(|ui| {
