@@ -813,6 +813,8 @@ To generate a pairing key, click Next.
                         ui.heading("Pairing the device");
                         ui.label("
 Please connect your iPhone with a cable to this computer.
+
+You might also already pair the device by pressing \"trust\" on your iPhone.
                         ");
 
                         match &self.devices {
@@ -854,7 +856,8 @@ Please connect your iPhone with a cable to this computer.
                                                                 .unwrap();
                                                             self.idevice_sender
                                                                 .send(IdeviceCommands::GetDeviceInfo(dev_clone))
-                                                                .unwrap();self.pairing_file = None;
+                                                                .unwrap();
+                                                            self.pairing_file = None;
                                                             self.pairing_file_message = None;
                                                             self.pairing_file_string = None;
                                                             self.installed_apps = None;
@@ -891,10 +894,27 @@ Please connect your iPhone with a cable to this computer.
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             ui.add_enabled_ui(self.devices.as_ref().map_or(false, | devs: &HashMap<String, UsbmuxdDevice> | !devs.is_empty()), |ui| {
                                 if ui.button("Next").clicked() {
-                                    self.screen = Screen::Developer;
+                                    self.screen = Screen::WirelessLockdown;
                                 }
                             });
                         });
+                    }
+                    Screen::WirelessLockdown => {
+                        ui.heading("Pairing the device");
+                        ui.label("
+iPhone found!
+
+Please press \"trust\" on your iPhone
+                        ");
+
+                        match &self.wireless_enabled {
+                            Some(Ok(_)) => {
+                                self.screen = Screen::Developer;
+                                ui.label("")
+                            },
+                            Some(Err(e)) => ui.label(RichText::new(format!("Failed: {e:?}")).color(Color32::RED)),
+                            None => ui.label("Loading..."),
+                        };
                     }
                     Screen::Developer => {
                         ui.heading("Disable Developer Mode");
@@ -902,28 +922,17 @@ Please connect your iPhone with a cable to this computer.
 Please disable the developer mode. This mode weakens the security of your iPhone!
 Please consider activating the lockdown mode. This streghtens your device security!
                         ");
+
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             if ui.button("Next").clicked() {
-                                self.screen = Screen::WirelessLockdown;
+                                self.screen = Screen::OldMain;
                             }
                         });
                         match &self.dev_mode_enabled {
                             Some(Ok(true)) => {}
                             Some(Ok(false)) => {
-                                self.screen = Screen::WirelessLockdown;
+                                self.screen = Screen::OldMain;
                             }
-                            Some(Err(_)) => {},
-                            None => {},
-                        };
-                    }
-                    Screen::WirelessLockdown => {
-                        ui.heading("Wireless Connection");
-                        ui.label("
-For this app to work, you need to enable Wi-Fi connectibility for this iPhone.
-Please go to Finder > [Your iPhone] > General > Options and activate \"Show this iPhone when on Wi-Fi\".
-                        ");
-                        match &self.wireless_enabled {
-                            Some(Ok(_)) => self.screen = Screen::OldMain,
                             Some(Err(_)) => {},
                             None => {},
                         };
@@ -979,7 +988,8 @@ Please go to Finder > [Your iPhone] > General > Options and activate \"Show this
                                                                 .unwrap();
                                                             self.idevice_sender
                                                                 .send(IdeviceCommands::GetDeviceInfo(dev_clone))
-                                                                .unwrap();self.pairing_file = None;
+                                                                .unwrap();
+                                                            self.pairing_file = None;
                                                             self.pairing_file_message = None;
                                                             self.pairing_file_string = None;
                                                             self.installed_apps = None;
